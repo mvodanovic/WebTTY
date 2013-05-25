@@ -1,20 +1,20 @@
 IDIR = ../inc
-CC = g++
+CC = gcc
 CFLAGS = -I$(IDIR) -lssh
 
 ODIR = obj
 
-_DEPS = logger.h daemon.h
+_DEPS = verify_knownhost.h execute_remote_cmd.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = logger.o daemon.o main.o
+_OBJ = verify_knownhost.o execute_remote_cmd.o webttyd.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
-$(ODIR)/%.o: %.cpp $(DEPS)
+$(ODIR)/%.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 webttyd: $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+	gcc -o $@ $^ $(CFLAGS)
 
 .PHONY: clean
 

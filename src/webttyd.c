@@ -35,9 +35,18 @@ int main (int argc, char **argv)
 		
 	}
 
+	/// Initialize global cryptographic data structures
+	rc = ssh_init();
+	if (rc != 0) {
+		fprintf(stderr, "SSH init failed!\n");
+		free(cmd);
+		exit(EXIT_FAILURE);
+	}
+
 	/// Open session & set options
 	session = ssh_new();
 	if (session == NULL) {
+		ssh_finalize();
 		free(cmd);
 		exit(EXIT_FAILURE);
 	}
@@ -50,6 +59,7 @@ int main (int argc, char **argv)
 	if (rc != SSH_OK) {
 		fprintf(stderr, "Error connection to localhost: %s\n", ssh_get_error(session));
 		ssh_free(session);
+		ssh_finalize();
 		free(cmd);
 		exit(EXIT_FAILURE);
 	}
@@ -58,6 +68,7 @@ int main (int argc, char **argv)
 	if (verify_knownhost(session) < 0) {
 		ssh_disconnect(session);
 		ssh_free(session);
+		ssh_finalize();
 		free(cmd);
 		exit(EXIT_FAILURE);
 	}
@@ -69,6 +80,7 @@ int main (int argc, char **argv)
 		fprintf(stderr, "Error authenticating with password: %s\n", ssh_get_error(session));
 		ssh_disconnect(session);
 		ssh_free(session);
+		ssh_finalize();
 		free(cmd);
 		exit(EXIT_FAILURE);
 	}
@@ -79,6 +91,7 @@ int main (int argc, char **argv)
 		fprintf(stderr, "Couldn't open a channel: %s\n", ssh_get_error(session));
 		ssh_disconnect(session);
 		ssh_free(session);
+		ssh_finalize();
 		free(cmd);
 		exit(EXIT_FAILURE);
 	}
@@ -94,6 +107,7 @@ int main (int argc, char **argv)
                 ssh_channel_free(channel);
                 ssh_disconnect(session);
                 ssh_free(session);
+		ssh_finalize();
                 free(cmd);
                 exit(EXIT_FAILURE);
         }
@@ -106,6 +120,7 @@ int main (int argc, char **argv)
 		ssh_channel_free(channel);
 		ssh_disconnect(session);
 		ssh_free(session);
+		ssh_finalize();
 		free(cmd);
 		exit(EXIT_FAILURE);
 	}
@@ -118,22 +133,23 @@ int main (int argc, char **argv)
                 ssh_channel_free(channel);
                 ssh_disconnect(session);
                 ssh_free(session);
+		ssh_finalize();
                 free(cmd);
                 exit(EXIT_FAILURE);
 	}
 
-	while (ssh_channel_read(channel, buffer, 1024, 0) > 0) {
-		//ssh_channel_read_nonblocking(channel, buffer, 512, 0);
+	while (ssh_channel_poll_timeout(channel, 5000, 0) == 0) {
+		ssh_channel_read(channel, buffer, 512, 0);
 		printf("%s", buffer);
-		sleep(5);
+		//sleep(5);
 	}
 
 	ssh_channel_write(channel, cmd, sizeof(cmd));
 
-	while (ssh_channel_read(channel, buffer, 1024, 0) > 0) {
-		//ssh_channel_read_nonblocking(channel, buffer, 512, 0);
+	while (ssh_channel_poll_timeout(channel, 5000, 0) > 0) {
+		ssh_channel_read(channel, buffer, 512, 0);
                 printf("%s", buffer);
-		sleep(5);
+		//sleep(5);
         }
 
 	//execute_remote_cmd(channel, cmd);
@@ -142,6 +158,7 @@ int main (int argc, char **argv)
 	ssh_channel_free(channel);
 	ssh_disconnect(session);
 	ssh_free(session);
+	ssh_finalize();
 	free(cmd);
 	printf("Successful exit!\n");
 	exit(EXIT_SUCCESS);

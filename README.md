@@ -3,7 +3,7 @@
 
 The idea is to create a fully functional PuTTY-like web application which could be installed & run on any web server. I don't know yet if I'll run into a dead end, hoping it won't come to that. And if it does, at least it will have been a fun project which taught me something new. As I have most experience with PHP, coding other parts of this project will be quite an undertaking. :)
 
-I found some similar attempts to implement something like this, but none of them are good enough. I want this app to be fully functional like any other terminal emulator, meaning i can run applications like `vim` or `htop` in it with no problems. The goal is to be compatible with modern `xterm-256color` terminal emulator implementations.
+I found some similar attempts to implement something like this, but none of them are good enough. I want this app to be fully functional like any other terminal emulator, meaning I can run applications like `vim` or `htop` in it with no problems. The goal is to be compatible with modern `xterm-256color` terminal emulator implementations.
 
 I've divided up the work in these approximate phases:  
   1.   Implement a SSH daemon (using [libssh](http://www.libssh.org/ "libssh")) [C/C++]  
@@ -13,7 +13,7 @@ I've divided up the work in these approximate phases:
   5.   Add the possibility to store & use multiple configurations for connecting with different servers [PHP,WEB]  
   6.   Add the possibility to open multiple TTYs in a single session (I.E. in multiple tabs) [PHP,WEB]  
 
-The basic idea so far is this... When a new connection is made, the daemon forks a new process which will handle it. If the client doesn't respond for some time, the daemon kills the corresponding process. On the client side there's a rich-text read-only display for the terminal and a masked input with special key bindings for data input. Every keystroke is sent to the server and the display is updated only when a response is received from the server. The web part will also have a comet model implemented which will continuously ping the serer which will in turn ping the daemon and keep the connection alive. This model will be responsible for fetching output data to the user. The daemon is needed because PHP kills everything when the script ends so there's no way of maintaining an open terminal across multiple server requests.
+The basic idea so far is this... When a new connection is made, the daemon forks a new process which will handle it. If the client doesn't respond for some time, the daemon kills the corresponding process. On the client side there's a rich-text read-only display for the terminal and a masked input with special key bindings for data input. Every keystroke is sent to the server and the display is updated only when a response is received from the server. The web part will also have a comet model implemented which will continuously ping the server which will in turn ping the daemon and keep the connection alive. This model will be responsible for fetching output data to the user. The daemon is needed because PHP kills everything when the script ends so there's no way of maintaining an open terminal across multiple server requests.
 
 That's about it. Currently I'm in the early stages of phase 1. I'll update this readme as the development progresses. Any feedback or assistance is apprecieted.
 
