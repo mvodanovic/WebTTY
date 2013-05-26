@@ -7,27 +7,26 @@
 
 /// Program-specific includes
 #include "daemon.h"
+#include "socket_helper.h"
+#include "session.h"
 
-void write_text(int socket_fd, const char *text)
-{
-	int length = strlen(text) + 1;
-	write(socket_fd, &length, sizeof(length));
-	write(socket_fd, text, length);
-}
 
 int main(int argc, char **argv)
 {
 	if (argc <= 1) {
 		WebTTY::Daemon::Start();
+		if (WebTTY::Session::isSession == 1) {
+		    WebTTY::Session::Start();
+		}
 	} else {
 		struct sockaddr_un name;
 
-		int socket_fd = socket(PF_LOCAL, SOCK_STREAM, 0);
+		int socketFd = socket(PF_LOCAL, SOCK_STREAM, 0);
 		name.sun_family = AF_LOCAL;
 		strcpy(name.sun_path, WebTTY::Daemon::getSocketPath().c_str());
-		connect(socket_fd, (sockaddr *) &name, SUN_LEN(&name));
-		write_text(socket_fd, argv[1]);
-		close(socket_fd);
+		connect(socketFd, (sockaddr *) &name, SUN_LEN(&name));
+		WebTTY::SocketHelper::write(socketFd, argv[1]);
+		close(socketFd);
 	}
 	exit(EXIT_SUCCESS);
 }

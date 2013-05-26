@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <string>
+#include <vector>
 
 namespace WebTTY
 {
@@ -18,10 +19,13 @@ namespace WebTTY
 
 		protected:
 			static void End(void);
+			int handleClient(int);
 
 			int socketFd;
 			struct sockaddr_un serverName;
 			static const std::string socketPath;
+			std::vector<pid_t> sessionList;
+			int doCleanup;
 	};
 }
 

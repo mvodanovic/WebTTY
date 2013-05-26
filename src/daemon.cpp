@@ -2,32 +2,43 @@
 #include <unistd.h>
 #include <cstdlib> /// !!!
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <sys/un.h>
 #include <cstring>
 #include <cerrno>
 #include <string>
+#include <csignal>
+#include <vector>
+#include <algorithm>
 
 /// Program-specific includes
 #include "daemon.h"
 #include "logger.h"
+#include "socket_helper.h"
+#include "session.h"
 
-int server(int client_socket)
+int WebTTY::Daemon::handleClient(int clientSocketFd)
 {
 	while (1) {
-		int length;
-
-		if (read(client_socket, &length, sizeof(length)) == 0) {
+		char *text = WebTTY::SocketHelper::read(clientSocketFd);
+		if (text == NULL) {
 			return 0;
 		}
 
-		char *text = (char *) malloc(length * sizeof(char));
-
-		read(client_socket, text, length);
-		if (text != NULL) {
-			WebTTY::Logger::Log(text);
+		pid_t pid = fork();
+		if (pid == -1) {
+			return 0;
+		} else if (pid == 0) {
+			Logger::Log(text);
+			Session::isSession = 1;
+			Session::sessionHash = text;
+			this->doCleanup = 0;
+			return 1;
 		}
 
-		if (!strcmp(text, "quit")) {
+		this->sessionList.push_back(pid);
+
+		if (!strcmp(text, "q")) {
 			free(text);
 			return 1;
 		}
@@ -55,12 +66,12 @@ void WebTTY::Daemon::Start(void)
 
 	/// Cleanup on exit
 	delete daemon;
-
-	End();
 }
 
 WebTTY::Daemon::Daemon()
 {
+	this->doCleanup = 1;
+
 	/// Create the socket
 	if ((this->socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
 		Logger::Die(strerror(errno));
@@ -87,7 +98,7 @@ WebTTY::Daemon::Daemon()
 			Logger::Log(strerror(errno));
 			continue;
 		}
-		quitMessageRecieved = server(clientSocketFd);
+		quitMessageRecieved = handleClient(clientSocketFd);
 		close(clientSocketFd);
 
 	} while (!quitMessageRecieved);
@@ -95,14 +106,25 @@ WebTTY::Daemon::Daemon()
 
 WebTTY::Daemon::~Daemon()
 {
+	if (this->doCleanup == 0) {
+		return;
+	}
 	close(this->socketFd);
 	unlink(Daemon::getSocketPath().c_str());
-	kill(getpgrp(), SIGTERM);
-	/// while wait();
-}
-
-void WebTTY::Daemon::End(void)
-{
-	WebTTY::Logger::Log("Everything went ok");
-	exit(EXIT_SUCCESS);
+	for(int i = 0; i <= this->sessionList.size(); i++) {
+		kill(this->sessionList[i], SIGTERM);
+	}
+	while (this->sessionList.size() > 0) {
+		pid_t pid = wait(NULL);
+		if (pid == -1) {
+			if (errno == ECHILD) {
+				break;
+			} else {
+				Logger::Log(strerror(errno));
+				break;
+			}
+		}
+		std::vector<pid_t>::iterator i = find(this->sessionList.begin(), this->sessionList.end(), pid);
+		this->sessionList.erase(i);
+	}
 }
