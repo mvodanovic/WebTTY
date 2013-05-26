@@ -2,6 +2,9 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <sys/socket.h>
+#include <string>
+#include <sys/un.h>
 
 #include "socket_helper.h"
 #include "logger.h"
@@ -57,4 +60,24 @@ void WebTTY::SocketHelper::write(int socketFd, char *buffer)
 		Logger::Log(strerror(errno));
 		return;
 	}
+}
+
+void WebTTY::SocketHelper::listen(int &socketFd, struct sockaddr_un &name, std::string socketPath)
+{
+    /// Create the socket
+    if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
+        Logger::Die(strerror(errno));
+    }
+
+    /// Indicate that this is a server
+    name.sun_family = AF_LOCAL;
+    strcpy(name.sun_path, socketPath.c_str());
+    if (bind(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
+        Logger::Die(strerror(errno));
+    }
+
+    /// Listen for connections
+    if (::listen(socketFd, 5) == -1) {
+        Logger::Die(strerror(errno));
+    }
 }

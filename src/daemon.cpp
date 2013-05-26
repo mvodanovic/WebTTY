@@ -72,20 +72,8 @@ WebTTY::Daemon::Daemon()
 {
 	this->doCleanup = 1;
 
-	/// Create the socket
-	if ((this->socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
-		Logger::Die(strerror(errno));
-	}
-	/// Indicate that this is a server
-	this->serverName.sun_family = AF_LOCAL;
-	strcpy(this->serverName.sun_path, Daemon::getSocketPath().c_str());
-	if (bind(this->socketFd, (sockaddr *) &this->serverName, SUN_LEN(&this->serverName)) == -1) {
-		Logger::Die(strerror(errno));
-	}
 	/// Listen for connections
-	if (listen(this->socketFd, 5) == -1) {
-		Logger::Die(strerror(errno));
-	}
+	SocketHelper::listen(this->socketFd, this->serverName, Daemon::getSocketPath());
 
 	/// Handle new clients
 	int quitMessageRecieved;

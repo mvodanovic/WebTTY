@@ -8,6 +8,7 @@
 /// Program-specific includes
 #include "session.h"
 #include "logger.h"
+#include "socket_helper.h"
 
 int WebTTY::Session::isSession = 0;
 std::string WebTTY::Session::sessionHash;
@@ -40,4 +41,29 @@ WebTTY::Session::Session(std::string sessionID)
 {
 	this->sessionID = sessionID;
 	Logger::Log(Session::getSocketPath(Session::sessionHash));
+
+	/// Listen for connections
+    SocketHelper::listen(this->socketFd, this->serverName, Session::getSocketPath(Session::sessionHash));
+
+    /// Handle new clients
+    int quitMessageRecieved;
+    do {
+        int clientSocketFd = 0;
+        struct sockaddr_un clientName;
+        socklen_t clientNameLength = 0;
+
+        if ((clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
+            Logger::Log(strerror(errno));
+            continue;
+        }
+        quitMessageRecieved = handleClient(clientSocketFd);
+        close(clientSocketFd);
+
+    } while (!quitMessageRecieved);
+}
+
+WebTTY::Session::~Session()
+{
+	close(this->socketFd);
+    unlink(Session::getSocketPath(Session::sessionHash).c_str());
 }
