@@ -21,34 +21,62 @@
 const std::string WebTTY::Daemon::socketPath = "/tmp/webttyd.socket";
 WebTTY::Daemon *WebTTY::Daemon::instance = NULL;
 
+/**
+ *   Method for handling a client connection to the daemon
+ *
+ *   @param int the connected client's socket file descriptor
+ *   @returns 0 if the daemon should accept new clients, 0 if the daemon should finish
+ */
 int WebTTY::Daemon::handleClient(int clientSocketFd)
 {
-	while (1) {
-		char *text = WebTTY::SocketHelper::read(clientSocketFd);
-		if (text == NULL) {
+	char *text = SocketHelper::read(clientSocketFd);
+
+	/// Invalid input, nothing to do
+	if (text == NULL) {
+		return 0;
+	}
+
+	/// Quit message received
+	if (!strcmp(text, "q")) {
+		free(text);
+		SocketHelper::write(clientSocketFd, "Quitting...");
+		return 1;
+	}
+
+	/// Create new session message received
+	if (!strcmp(text, "c")) {
+		free(text);
+
+		/// Receive session ID
+		text = SocketHelper::read(clientSocketFd);
+
+		/// Invalid input, nothing to do
+		if (text == NULL || strlen(text) == 0) {
+			free(text);
+			Logger::Log("Invalid session ID given");
 			return 0;
 		}
 
+		/// Fork new session process
 		pid_t pid = fork();
 		if (pid == -1) {
-			return 0;
+			Logger::Log("Cannot fork a new process for the session");
 		} else if (pid == 0) {
-			Logger::Log(text);
+			/// Session process (exit daemon & start session)
 			Session::isSession = 1;
 			Session::sessionHash = text;
 			this->doCleanup = 0;
-			return 1;
-		}
-
-		this->sessionList.push_back(pid);
-
-		if (!strcmp(text, "q")) {
 			free(text);
+			SocketHelper::write(clientSocketFd, Session::getSocketPath(Session::sessionHash).c_str());
 			return 1;
 		}
 
-		free(text);
+		/// Register the session with the daemon
+		this->sessionList.push_back(pid);
 	}
+
+	free(text);
+	return 0;
 }
 
 const std::string WebTTY::Daemon::getSocketPath(void)
@@ -81,13 +109,15 @@ void WebTTY::Daemon::Start(void)
 
 WebTTY::Daemon::Daemon()
 {
-	Daemon::instance = this;
-
-	signal (SIGCHLD, WebTTY::Daemon::reapChildren);
+	/// Class parameter initialization
 	this->doCleanup = 1;
 
+	/// Setup child termination handler
+	Daemon::instance = this;
+	signal (SIGCHLD, WebTTY::Daemon::reapChildren);
+
 	/// Listen for connections
-	SocketHelper::listen(this->socketFd, this->serverName, Daemon::getSocketPath());
+	SocketHelper::listen(this->socketFd, Daemon::getSocketPath());
 
 	/// Handle new clients
 	int quitMessageRecieved;

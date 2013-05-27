@@ -1,9 +1,7 @@
 /// Standard library includes
 #include <cstdlib>
-#include <sys/socket.h> /// !!!
-#include <sys/un.h> /// !!!
-#include <cstring> /// !!!
-#include <unistd.h> /// !!!
+#include <cstring>
+#include <iostream> /// !!!
 
 /// Program-specific includes
 #include "daemon.h"
@@ -14,19 +12,40 @@
 int main(int argc, char **argv)
 {
 	if (argc <= 1) {
+		/// Server / daemon
 		WebTTY::Daemon::Start();
 		if (WebTTY::Session::isSession == 1) {
-		    WebTTY::Session::Start();
+			WebTTY::Session::Start();
 		}
 	} else {
-		struct sockaddr_un name;
-
-		int socketFd = socket(PF_LOCAL, SOCK_STREAM, 0);
-		name.sun_family = AF_LOCAL;
-		strcpy(name.sun_path, WebTTY::Daemon::getSocketPath().c_str());
-		connect(socketFd, (sockaddr *) &name, SUN_LEN(&name));
-		WebTTY::SocketHelper::write(socketFd, argv[1]);
-		close(socketFd);
+		/// CLI client
+		if (!strcmp(argv[1], "q")) {
+			/// Send quit signal
+			int socketFd;
+			WebTTY::SocketHelper::connect(socketFd, WebTTY::Daemon::getSocketPath());
+			WebTTY::SocketHelper::write(socketFd, "q");
+			char *message = WebTTY::SocketHelper::read(socketFd);
+			if (message != NULL) {
+				std::cout << message << std::endl;
+				free(message);
+			}
+			close(socketFd);
+		} else if (!strcmp(argv[1], "c") && argc >= 3) {
+			/// Send create new session signal
+			int socketFd;
+			WebTTY::SocketHelper::connect(socketFd, WebTTY::Daemon::getSocketPath());
+			WebTTY::SocketHelper::write(socketFd, "c");
+			WebTTY::SocketHelper::write(socketFd, argv[2]);
+			char *message = WebTTY::SocketHelper::read(socketFd);
+			if (message != NULL) {
+				std::cout << message << std::endl;
+				free(message);
+			}
+			close(socketFd);
+		} else {
+			/// Invalid usage
+		}
 	}
+
 	exit(EXIT_SUCCESS);
 }

@@ -2,8 +2,6 @@
 #define WEBTTY_SOCKET_HELPER__H
 
 #include <string>
-#include <sys/socket.h>
-#include <sys/un.h>
 
 namespace WebTTY
 {
@@ -11,8 +9,9 @@ namespace WebTTY
 	{
 		public:
 			static char *read(int);
-			static void write(int, char *);
-			static void listen(int &, struct sockaddr_un &, std::string);
+			static void write(int, const char *);
+			static void listen(int &, std::string);
+			static void connect(int &, std::string);
 	};
 }
 

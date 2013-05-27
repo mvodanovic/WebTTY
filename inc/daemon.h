@@ -2,8 +2,7 @@
 #define WEBTTY_DAEMON__H
 
 /// Standard library includes
-#include <sys/socket.h>
-#include <sys/un.h>
+#include <sys/types.h>
 #include <string>
 #include <vector>
 
@@ -24,7 +23,6 @@ namespace WebTTY
 
 			static Daemon *instance;
 			int socketFd;
-			struct sockaddr_un serverName;
 			static const std::string socketPath;
 			std::vector<pid_t> sessionList;
 			int doCleanup;

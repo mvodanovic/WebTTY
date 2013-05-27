@@ -40,7 +40,7 @@ char *WebTTY::SocketHelper::read(int socketFd)
 	return buffer;
 }
 
-void WebTTY::SocketHelper::write(int socketFd, char *buffer)
+void WebTTY::SocketHelper::write(int socketFd, const char *buffer)
 {
 	if (buffer == NULL) {
 		return;
@@ -62,22 +62,46 @@ void WebTTY::SocketHelper::write(int socketFd, char *buffer)
 	}
 }
 
-void WebTTY::SocketHelper::listen(int &socketFd, struct sockaddr_un &name, std::string socketPath)
+void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 {
-    /// Create the socket
-    if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
-        Logger::Die(strerror(errno));
-    }
+	struct sockaddr_un name;
+	name.sun_family = AF_LOCAL;
+	strcpy(name.sun_path, socketPath.c_str());
 
-    /// Indicate that this is a server
-    name.sun_family = AF_LOCAL;
-    strcpy(name.sun_path, socketPath.c_str());
-    if (bind(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
-        Logger::Die(strerror(errno));
-    }
+	/// Create the socket
+	if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
+		Logger::Die(strerror(errno));
+	}
 
-    /// Listen for connections
-    if (::listen(socketFd, 5) == -1) {
-        Logger::Die(strerror(errno));
-    }
+	/// Indicate that this is a server
+	name.sun_family = AF_LOCAL;
+	strcpy(name.sun_path, socketPath.c_str());
+	if (bind(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
+		close(socketFd);
+		Logger::Die(strerror(errno));
+	}
+
+	/// Listen for connections
+	if (::listen(socketFd, 5) == -1) {
+		close(socketFd);
+		Logger::Die(strerror(errno));
+	}
+}
+
+void WebTTY::SocketHelper::connect(int &socketFd, std::string socketPath)
+{
+	struct sockaddr_un name;
+	name.sun_family = AF_LOCAL;
+	strcpy(name.sun_path, socketPath.c_str());
+
+	/// Create the socket
+	if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1 ) {
+		Logger::Die(strerror(errno));
+	}
+
+	/// Connect to socket
+	if (::connect(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
+		close(socketFd);
+		Logger::Die(strerror(errno));
+	}
 }
