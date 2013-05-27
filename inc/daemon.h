@@ -13,14 +13,16 @@ namespace WebTTY
 	{
 		public:
 			static void Start(void);
-			Daemon(void);
+			static Daemon *getInstance(void);
 			~Daemon(void);
 			static const std::string getSocketPath(void);
+			static void reapChildren(int);
 
 		protected:
-			static void End(void);
 			int handleClient(int);
+			Daemon(void);
 
+			static Daemon *instance;
 			int socketFd;
 			struct sockaddr_un serverName;
 			static const std::string socketPath;

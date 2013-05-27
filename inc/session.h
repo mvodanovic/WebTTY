@@ -15,6 +15,7 @@ namespace WebTTY
 			static pid_t Start();
 			static std::string getSocketPath(std::string);
 			Session(std::string);
+			~Session(void);
 
 		protected:
 			std::string sessionID;

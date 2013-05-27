@@ -17,6 +17,10 @@
 #include "socket_helper.h"
 #include "session.h"
 
+
+const std::string WebTTY::Daemon::socketPath = "/tmp/webttyd.socket";
+WebTTY::Daemon *WebTTY::Daemon::instance = NULL;
+
 int WebTTY::Daemon::handleClient(int clientSocketFd)
 {
 	while (1) {
@@ -47,11 +51,18 @@ int WebTTY::Daemon::handleClient(int clientSocketFd)
 	}
 }
 
-const std::string WebTTY::Daemon::socketPath = "/tmp/webttyd.socket";
-
 const std::string WebTTY::Daemon::getSocketPath(void)
 {
 	return Daemon::socketPath;
+}
+
+WebTTY::Daemon *WebTTY::Daemon::getInstance(void)
+{
+	if (Daemon::instance == NULL) {
+		new Daemon();
+	}
+
+	return Daemon::instance;
 }
 
 void WebTTY::Daemon::Start(void)
@@ -62,7 +73,7 @@ void WebTTY::Daemon::Start(void)
 	}
 
 	/// Initialize the daemon
-	Daemon *daemon = new Daemon();
+	Daemon *daemon = Daemon::getInstance();
 
 	/// Cleanup on exit
 	delete daemon;
@@ -70,6 +81,9 @@ void WebTTY::Daemon::Start(void)
 
 WebTTY::Daemon::Daemon()
 {
+	Daemon::instance = this;
+
+	signal (SIGCHLD, WebTTY::Daemon::reapChildren);
 	this->doCleanup = 1;
 
 	/// Listen for connections
@@ -94,6 +108,8 @@ WebTTY::Daemon::Daemon()
 
 WebTTY::Daemon::~Daemon()
 {
+	Daemon::instance = NULL;
+
 	if (this->doCleanup == 0) {
 		return;
 	}
@@ -102,17 +118,24 @@ WebTTY::Daemon::~Daemon()
 	for(int i = 0; i <= this->sessionList.size(); i++) {
 		kill(this->sessionList[i], SIGTERM);
 	}
-	while (this->sessionList.size() > 0) {
-		pid_t pid = wait(NULL);
-		if (pid == -1) {
-			if (errno == ECHILD) {
-				break;
-			} else {
-				Logger::Log(strerror(errno));
+}
+
+void WebTTY::Daemon::reapChildren(int signal)
+{
+	switch (signal) {
+		case SIGCHLD:
+			Daemon *instance = Daemon::getInstance();
+			if (instance == NULL) {
 				break;
 			}
-		}
-		std::vector<pid_t>::iterator i = find(this->sessionList.begin(), this->sessionList.end(), pid);
-		this->sessionList.erase(i);
+			while (1) {
+				pid_t pid = waitpid(-1, NULL, WNOHANG);
+				if (pid <= 0) {
+					break;
+				}
+				std::vector<pid_t>::iterator i = find(instance->sessionList.begin(), instance->sessionList.end(), pid);
+				instance->sessionList.erase(i);
+			}
+			break;
 	}
 }

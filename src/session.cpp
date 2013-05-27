@@ -39,31 +39,31 @@ std::string WebTTY::Session::getSocketPath(std::string sessionID)
 
 WebTTY::Session::Session(std::string sessionID)
 {
-	this->sessionID = sessionID;
+	/*this->sessionID = sessionID;
 	Logger::Log(Session::getSocketPath(Session::sessionHash));
 
 	/// Listen for connections
-    SocketHelper::listen(this->socketFd, this->serverName, Session::getSocketPath(Session::sessionHash));
+	SocketHelper::listen(this->socketFd, this->serverName, Session::getSocketPath(Session::sessionHash));
 
-    /// Handle new clients
-    int quitMessageRecieved;
-    do {
-        int clientSocketFd = 0;
-        struct sockaddr_un clientName;
-        socklen_t clientNameLength = 0;
+	/// Handle new clients
+	int quitMessageRecieved;
+	do {
+		int clientSocketFd = 0;
+		struct sockaddr_un clientName;
+		socklen_t clientNameLength = 0;
 
-        if ((clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
-            Logger::Log(strerror(errno));
-            continue;
-        }
-        quitMessageRecieved = handleClient(clientSocketFd);
-        close(clientSocketFd);
+		if ((clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
+			Logger::Log(strerror(errno));
+			continue;
+		}
+		quitMessageRecieved = handleClient(clientSocketFd);
+		close(clientSocketFd);
 
-    } while (!quitMessageRecieved);
+	} while (!quitMessageRecieved);*/
 }
 
 WebTTY::Session::~Session()
 {
-	close(this->socketFd);
-    unlink(Session::getSocketPath(Session::sessionHash).c_str());
+	/*close(this->socketFd);
+	unlink(Session::getSocketPath(Session::sessionHash).c_str());*/
 }

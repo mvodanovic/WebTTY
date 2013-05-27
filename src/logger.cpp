@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <unistd.h>
 
 /// Program-specific includes
 #include "logger.h"
@@ -14,5 +15,5 @@ void WebTTY::Logger::Die(std::string message)
 
 void WebTTY::Logger::Log(std::string message)
 {
-	std::cout << "webttyd: " << message << std::endl;
+	std::cout << "webttyd (" << getpid() << "): " << message << std::endl;
 }
