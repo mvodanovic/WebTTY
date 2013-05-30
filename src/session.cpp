@@ -55,7 +55,9 @@ WebTTY::Session::Session(std::string sessionID)
 	struct sockaddr_un clientName;
 	socklen_t clientNameLength = 0;
 	if ((this->clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
-		Logger::Log(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Log(strerror(errno));
+		}
 		return;
 	}
 
@@ -65,7 +67,9 @@ WebTTY::Session::Session(std::string sessionID)
 		close(this->socketFd);
 		close(this->clientSocketFd);
 		unlink(Session::getSocketPath(Session::sessionHash).c_str());
-		Logger::Die(strerror(terrno));
+		if (terrno != EINTR) {
+			Logger::Die(strerror(terrno));
+		}
 	}
 
 	/// Setup signal handlers
@@ -81,6 +85,13 @@ WebTTY::Session::Session(std::string sessionID)
 
 WebTTY::Session::~Session()
 {
+	/// Reset signal handlers
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = SIG_DFL;
+	sigaction (SIGINT, &sa, NULL);
+	sigaction (SIGTERM, &sa, NULL);
+
 	close(this->socketFd);
 	close(this->clientSocketFd);
 	unlink(Session::getSocketPath(Session::sessionHash).c_str());
@@ -89,7 +100,6 @@ WebTTY::Session::~Session()
 void WebTTY::Session::handleInput(void)
 {
 	this->buffer << "Received: " << SocketHelper::read(this->clientSocketFd);
-	Logger::Log(this->buffer.str());
 	pthread_join(this->outputThreadID, NULL);
 	return;
 }
@@ -97,7 +107,6 @@ void WebTTY::Session::handleInput(void)
 void WebTTY::Session::handleOutput(void)
 {
 	while (this->buffer.peek() == -1) {
-	    Logger::Log("Sleeping...");
 		sleep(1);
 	}
 	SocketHelper::write(this->clientSocketFd, this->buffer.str().c_str());

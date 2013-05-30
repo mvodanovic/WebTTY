@@ -17,7 +17,9 @@ char *WebTTY::SocketHelper::read(int socketFd)
 
 	retRead = ::read(socketFd, &length, sizeof(length));
 	if (retRead == -1) {
-		Logger::Log(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Log(strerror(errno));
+		}
 		return buffer;
 	} else if (retRead == 0) {
 		return buffer;
@@ -28,7 +30,9 @@ char *WebTTY::SocketHelper::read(int socketFd)
 	if (retRead == -1) {
 		free(buffer);
 		buffer = NULL;
-		Logger::Log(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Log(strerror(errno));
+		}
 		return buffer;
 	} else if (retRead != length) {
 		free(buffer);
@@ -51,13 +55,17 @@ void WebTTY::SocketHelper::write(int socketFd, const char *buffer)
 
 	retWrite = ::write(socketFd, &length, sizeof(length));
 	if (retWrite == -1) {
-		Logger::Log(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Log(strerror(errno));
+		}
 		return;
 	}
 
 	retWrite = ::write(socketFd, buffer, length);
 	if (retWrite == -1) {
-		Logger::Log(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Log(strerror(errno));
+		}
 		return;
 	}
 }
@@ -70,7 +78,9 @@ void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 
 	/// Create the socket
 	if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
-		Logger::Die(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Die(strerror(errno));
+		}
 	}
 
 	/// Indicate that this is a server
@@ -78,13 +88,17 @@ void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 	strcpy(name.sun_path, socketPath.c_str());
 	if (bind(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
 		close(socketFd);
-		Logger::Die(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Die(strerror(errno));
+		}
 	}
 
 	/// Listen for connections
 	if (::listen(socketFd, 5) == -1) {
 		close(socketFd);
-		Logger::Die(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Die(strerror(errno));
+		}
 	}
 }
 
@@ -95,13 +109,17 @@ void WebTTY::SocketHelper::connect(int &socketFd, std::string socketPath)
 	strcpy(name.sun_path, socketPath.c_str());
 
 	/// Create the socket
-	if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1 ) {
-		Logger::Die(strerror(errno));
+	if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
+		if (errno != EINTR) {
+			Logger::Die(strerror(errno));
+		}
 	}
 
 	/// Connect to socket
 	if (::connect(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
 		close(socketFd);
-		Logger::Die(strerror(errno));
+		if (errno != EINTR) {
+			Logger::Die(strerror(errno));
+		}
 	}
 }

@@ -114,7 +114,7 @@ WebTTY::Daemon::Daemon()
 	this->doCleanup = 1;
 	Daemon::instance = this;
 
-	/// Setup child termination handlers
+	/// Setup signal handlers
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &WebTTY::Daemon::reapChildren;
@@ -133,7 +133,9 @@ WebTTY::Daemon::Daemon()
 		socklen_t clientNameLength = 0;
 
 		if ((clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
-			Logger::Log(strerror(errno));
+			if (errno != EINTR) {
+				Logger::Log(strerror(errno));
+			}
 			continue;
 		}
 		quitMessageRecieved = handleClient(clientSocketFd);
@@ -144,6 +146,14 @@ WebTTY::Daemon::Daemon()
 
 WebTTY::Daemon::~Daemon()
 {
+	/// Reset signal handlers
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = SIG_DFL;
+	sigaction (SIGCHLD, &sa, NULL);
+	sigaction (SIGINT, &sa, NULL);
+	sigaction (SIGTERM, &sa, NULL);
+
 	if (this->doCleanup != 0) {
 		close(this->socketFd);
 		unlink(Daemon::getSocketPath().c_str());
