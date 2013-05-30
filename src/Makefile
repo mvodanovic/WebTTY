@@ -1,6 +1,6 @@
 IDIR = ../inc
 CC = g++
-CFLAGS = -I$(IDIR) -lssh
+CFLAGS = -I$(IDIR) -lssh -lpthread
 COMMAND = webttyd
 
 ODIR = obj

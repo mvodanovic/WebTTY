@@ -96,6 +96,7 @@ WebTTY::Daemon *WebTTY::Daemon::getInstance(void)
 void WebTTY::Daemon::Start(void)
 {
 	/// Daemonize the process
+	signal(SIGCHLD, SIG_IGN);
 	if (daemon(0, 1) == -1) {
 		WebTTY::Logger::Die("Couldn't create a daemon");
 	}
@@ -111,10 +112,15 @@ WebTTY::Daemon::Daemon()
 {
 	/// Class parameter initialization
 	this->doCleanup = 1;
-
-	/// Setup child termination handler
 	Daemon::instance = this;
-	signal (SIGCHLD, WebTTY::Daemon::reapChildren);
+
+	/// Setup child termination handlers
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = &WebTTY::Daemon::reapChildren;
+	sigaction (SIGCHLD, &sa, NULL);
+	sigaction (SIGINT, &sa, NULL);
+	sigaction (SIGTERM, &sa, NULL);
 
 	/// Listen for connections
 	SocketHelper::listen(this->socketFd, Daemon::getSocketPath());
@@ -138,26 +144,31 @@ WebTTY::Daemon::Daemon()
 
 WebTTY::Daemon::~Daemon()
 {
-	Daemon::instance = NULL;
+	if (this->doCleanup != 0) {
+		close(this->socketFd);
+		unlink(Daemon::getSocketPath().c_str());
+		Daemon::reapChildren(SIGINT);
+	}
 
-	if (this->doCleanup == 0) {
-		return;
-	}
-	close(this->socketFd);
-	unlink(Daemon::getSocketPath().c_str());
-	for(int i = 0; i <= this->sessionList.size(); i++) {
-		kill(this->sessionList[i], SIGTERM);
-	}
+	Daemon::instance = NULL;
 }
 
 void WebTTY::Daemon::reapChildren(int signal)
 {
+	Daemon *instance = Daemon::getInstance();
+	if (instance == NULL) {
+		return;
+	}
+
 	switch (signal) {
-		case SIGCHLD:
-			Daemon *instance = Daemon::getInstance();
-			if (instance == NULL) {
-				break;
+		case SIGINT:
+		case SIGTERM:
+			for (std::vector<pid_t>::iterator i = instance->sessionList.begin(); i != instance->sessionList.end(); i++) {
+				kill(*i, SIGINT);
 			}
+			/// !!! continue below
+		case SIGCHLD:
+
 			while (1) {
 				pid_t pid = waitpid(-1, NULL, WNOHANG);
 				if (pid <= 0) {

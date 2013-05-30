@@ -4,6 +4,11 @@
 #include <cerrno>
 #include <sstream>
 #include <cstring>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/types.h>
+#include <csignal>
 
 /// Program-specific includes
 #include "session.h"
@@ -12,22 +17,22 @@
 
 int WebTTY::Session::isSession = 0;
 std::string WebTTY::Session::sessionHash;
+WebTTY::Session *WebTTY::Session::instance = NULL;
 
-pid_t WebTTY::Session::Start()
+WebTTY::Session *WebTTY::Session::getInstance(void)
 {
-	pid_t pid = fork();
-
-	if (pid == -1) {
-		Logger::Log(strerror(errno));
-		return pid;
-	} else if (pid > 0) {
-		return pid;
+	if (Session::instance == NULL) {
+		new Session(Session::sessionHash);
 	}
 
-	Session *session = new Session(Session::sessionHash);
+	return Session::instance;
+}
+
+void WebTTY::Session::Start()
+{
+	Session *session = Session::getInstance();
 	delete session;
 
-	return pid;
 }
 
 std::string WebTTY::Session::getSocketPath(std::string sessionID)
@@ -39,31 +44,89 @@ std::string WebTTY::Session::getSocketPath(std::string sessionID)
 
 WebTTY::Session::Session(std::string sessionID)
 {
-	/*this->sessionID = sessionID;
-	Logger::Log(Session::getSocketPath(Session::sessionHash));
+	Session::instance = this;
+	this->sessionID = sessionID;
+	this->outputThreadID = 0;
 
 	/// Listen for connections
-	SocketHelper::listen(this->socketFd, this->serverName, Session::getSocketPath(Session::sessionHash));
+	SocketHelper::listen(this->socketFd, Session::getSocketPath(Session::sessionHash));
 
-	/// Handle new clients
-	int quitMessageRecieved;
-	do {
-		int clientSocketFd = 0;
-		struct sockaddr_un clientName;
-		socklen_t clientNameLength = 0;
+	/// Accept client connection
+	struct sockaddr_un clientName;
+	socklen_t clientNameLength = 0;
+	if ((this->clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
+		Logger::Log(strerror(errno));
+		return;
+	}
 
-		if ((clientSocketFd = accept(this->socketFd, (sockaddr *) &clientName, &clientNameLength)) == -1) {
-			Logger::Log(strerror(errno));
-			continue;
-		}
-		quitMessageRecieved = handleClient(clientSocketFd);
-		close(clientSocketFd);
+	/// Set I/O handlers in separate threads
+	int terrno = pthread_create(&this->outputThreadID, NULL, output_handler_wrapper, NULL);
+	if (terrno != 0) {
+		close(this->socketFd);
+		close(this->clientSocketFd);
+		unlink(Session::getSocketPath(Session::sessionHash).c_str());
+		Logger::Die(strerror(terrno));
+	}
 
-	} while (!quitMessageRecieved);*/
+	/// Setup signal handlers
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = &WebTTY::Session::reapChildThread;
+	sigaction (SIGINT, &sa, NULL);
+	sigaction (SIGKILL, &sa, NULL);
+
+	this->handleInput();
+
 }
 
 WebTTY::Session::~Session()
 {
-	/*close(this->socketFd);
-	unlink(Session::getSocketPath(Session::sessionHash).c_str());*/
+	close(this->socketFd);
+	close(this->clientSocketFd);
+	unlink(Session::getSocketPath(Session::sessionHash).c_str());
+}
+
+void WebTTY::Session::handleInput(void)
+{
+	this->buffer << "Received: " << SocketHelper::read(this->clientSocketFd);
+	Logger::Log(this->buffer.str());
+	pthread_join(this->outputThreadID, NULL);
+	return;
+}
+
+void WebTTY::Session::handleOutput(void)
+{
+	while (this->buffer.peek() == -1) {
+	    Logger::Log("Sleeping...");
+		sleep(1);
+	}
+	SocketHelper::write(this->clientSocketFd, this->buffer.str().c_str());
+	return;
+}
+
+void *output_handler_wrapper(void *p)
+{
+	WebTTY::Session::getInstance()->handleOutput();
+	return NULL;
+}
+
+void WebTTY::Session::reapChildThread(int signal)
+{
+	switch (signal) {
+		case SIGINT:
+		case SIGTERM:
+			Session *instance = Session::getInstance();
+			if (instance == NULL) {
+				break;
+			}
+
+			if (instance->outputThreadID == 0) {
+				break;
+			}
+
+			pthread_kill(instance->outputThreadID, SIGINT);
+			pthread_join(instance->outputThreadID, NULL);
+			instance->outputThreadID = 0;
+			break;
+	}
 }
