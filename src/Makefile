@@ -5,10 +5,10 @@ COMMAND = webttyd
 
 ODIR = obj
 
-_DEPS = logger.h socket_helper.h session.h daemon.h
+_DEPS = logger.h socket_helper.h tty.h session.h daemon.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = logger.o socket_helper.o session.o daemon.o main.o
+_OBJ = logger.o socket_helper.o tty.o session.o daemon.o main.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 $(ODIR)/%.o: %.cpp $(DEPS)

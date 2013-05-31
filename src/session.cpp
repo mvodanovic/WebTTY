@@ -14,6 +14,7 @@
 #include "session.h"
 #include "logger.h"
 #include "socket_helper.h"
+#include "tty.h"
 
 int WebTTY::Session::isSession = 0;
 std::string WebTTY::Session::sessionHash;
@@ -72,12 +73,14 @@ WebTTY::Session::Session(std::string sessionID)
 		}
 	}
 
+	this->tty = new TTY("");
+
 	/// Setup signal handlers
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = &WebTTY::Session::reapChildThread;
 	sigaction (SIGINT, &sa, NULL);
-	sigaction (SIGKILL, &sa, NULL);
+	sigaction (SIGTERM, &sa, NULL);
 
 	this->handleInput();
 
@@ -95,21 +98,24 @@ WebTTY::Session::~Session()
 	close(this->socketFd);
 	close(this->clientSocketFd);
 	unlink(Session::getSocketPath(Session::sessionHash).c_str());
+	delete this->tty;
 }
 
 void WebTTY::Session::handleInput(void)
 {
-	this->buffer << "Received: " << SocketHelper::read(this->clientSocketFd);
+    while (1) {
+        this->tty->send(SocketHelper::read(this->clientSocketFd));
+    }
 	pthread_join(this->outputThreadID, NULL);
 	return;
 }
 
 void WebTTY::Session::handleOutput(void)
 {
-	while (this->buffer.peek() == -1) {
+	while (1) {
 		sleep(1);
+		SocketHelper::write(this->clientSocketFd, this->tty->receive().c_str());
 	}
-	SocketHelper::write(this->clientSocketFd, this->buffer.str().c_str());
 	return;
 }
 

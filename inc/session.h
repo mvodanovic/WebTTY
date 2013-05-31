@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sstream>
+#include "tty.h"
 
 
 void *output_handler_wrapper(void *p);
@@ -33,6 +34,7 @@ namespace WebTTY
 			static Session *instance;
 			pthread_t outputThreadID;
 			std::stringstream buffer;
+			TTY *tty;
 
 			void handleInput(void);
 			void handleOutput(void);
