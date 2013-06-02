@@ -104,7 +104,10 @@ WebTTY::Session::~Session()
 void WebTTY::Session::handleInput(void)
 {
     while (1) {
-        this->tty->send(SocketHelper::read(this->clientSocketFd));
+	char *buffer = SocketHelper::read(this->clientSocketFd);
+	if (buffer != NULL) {
+            this->tty->send(buffer);
+        }
     }
 	pthread_join(this->outputThreadID, NULL);
 	return;
@@ -114,7 +117,10 @@ void WebTTY::Session::handleOutput(void)
 {
 	while (1) {
 		sleep(1);
-		SocketHelper::write(this->clientSocketFd, this->tty->receive().c_str());
+		std::string buffer = this->tty->receive();
+		if (buffer.length() > 0) {
+			SocketHelper::write(this->clientSocketFd, buffer.c_str());
+		}
 	}
 	return;
 }

@@ -54,7 +54,8 @@ WebTTY::TTY::TTY(std::string password)
     }
 
     /// Authenticate ourselves
-    rc = ssh_userauth_password(this->session, NULL, this->password.c_str());
+    //rc = ssh_userauth_password(this->session, NULL, this->password.c_str());
+    rc = ssh_userauth_autopubkey(this->session, this->password.c_str());
     if (rc != SSH_AUTH_SUCCESS) {
         Logger::Log("TTY error authenticating with password: ", 0);
         Logger::Log(ssh_get_error(this->session));
@@ -139,13 +140,14 @@ void WebTTY::TTY::send(std::string input)
 
 std::string WebTTY::TTY::receive(void)
 {
-    std::string output;
+    std::string output = "";
     char buffer[512] = {0};
 
     if (this->active == 1) {
         while (ssh_channel_poll_timeout(this->channel, 5000, 0) > 0) {
-            ssh_channel_read(this->channel, buffer, 512, 0);
-            output.append(buffer);
+            if (ssh_channel_read_nonblocking(this->channel, buffer, 512, 0) > 0) {
+                output += buffer;
+            }
             buffer[0] = '\0';
         }
     }

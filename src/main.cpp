@@ -47,6 +47,11 @@ int main(int argc, char **argv)
 			int socketFd;
 			WebTTY::SocketHelper::connect(socketFd, WebTTY::Session::getSocketPath(argv[2]));
 			WebTTY::SocketHelper::write(socketFd, argv[3]);
+			close(socketFd);
+		} else if (!strcmp(argv[1], "r") && argc >= 3) {
+			/// Read data from session
+			int socketFd;
+			WebTTY::SocketHelper::connect(socketFd, WebTTY::Session::getSocketPath(argv[2]));
 			char *message = WebTTY::SocketHelper::read(socketFd);
 			if (message != NULL) {
 				std::cout << message << std::endl;
