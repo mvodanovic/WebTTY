@@ -5,9 +5,11 @@
 #include <sys/socket.h>
 #include <string>
 #include <sys/un.h>
+#include <sys/stat.h>
 
 #include "socket_helper.h"
 #include "logger.h"
+
 
 char *WebTTY::SocketHelper::read(int socketFd)
 {
@@ -15,7 +17,7 @@ char *WebTTY::SocketHelper::read(int socketFd)
 	int length;
 	int retRead;
 
-	retRead = ::read(socketFd, &length, sizeof(length));
+	retRead = ::read(socketFd, &length, 4);
 	if (retRead == -1) {
 		if (errno != EINTR) {
 			Logger::Log(strerror(errno));
@@ -36,8 +38,8 @@ char *WebTTY::SocketHelper::read(int socketFd)
 		return buffer;
 	} else if (retRead != length) {
 		free(buffer);
-		buffer = NULL;
 		Logger::Log("buffer read error");
+		buffer = NULL;
 		return buffer;
 	}
 
@@ -73,7 +75,7 @@ void WebTTY::SocketHelper::write(int socketFd, const char *buffer)
 void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 {
 	struct sockaddr_un name;
-	name.sun_family = AF_LOCAL;
+	name.sun_family = AF_UNIX;
 	strcpy(name.sun_path, socketPath.c_str());
 
 	/// Create the socket
@@ -84,14 +86,15 @@ void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 	}
 
 	/// Indicate that this is a server
-	name.sun_family = AF_LOCAL;
-	strcpy(name.sun_path, socketPath.c_str());
 	if (bind(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
 		close(socketFd);
 		if (errno != EINTR) {
 			Logger::Die(strerror(errno));
 		}
 	}
+
+	/// Set appropriate permissions
+	chmod(socketPath.c_str(), 0777);
 
 	/// Listen for connections
 	if (::listen(socketFd, 5) == -1) {
@@ -105,7 +108,7 @@ void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 void WebTTY::SocketHelper::connect(int &socketFd, std::string socketPath)
 {
 	struct sockaddr_un name;
-	name.sun_family = AF_LOCAL;
+	name.sun_family = AF_UNIX;
 	strcpy(name.sun_path, socketPath.c_str());
 
 	/// Create the socket

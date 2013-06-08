@@ -1,0 +1,3 @@
+[submodule "webfw"]
+	path = webfw
+	url = git://github.com/mvodanovic/WebFW.git
