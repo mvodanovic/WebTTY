@@ -103,12 +103,12 @@ WebTTY::Session::~Session()
 
 void WebTTY::Session::handleInput(void)
 {
-    while (1) {
+	while (1) {
 	char *buffer = SocketHelper::read(this->clientSocketFd);
 	if (buffer != NULL) {
-            this->tty->send(buffer);
-        }
-    }
+			this->tty->send(buffer);
+		}
+	}
 	pthread_join(this->outputThreadID, NULL);
 	return;
 }

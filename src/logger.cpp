@@ -20,20 +20,20 @@ void WebTTY::Logger::Log(std::string message, int flush)
 {
 	Logger::buffer << message;
 	if (flush > 0) {
-	    Logger::Flush();
+		Logger::Flush();
 	}
 }
 
 void WebTTY::Logger::Log(long int number, int flush)
 {
-    Logger::buffer << number;
-    if (flush > 0) {
-        Logger::Flush();
-    }
+	Logger::buffer << number;
+	if (flush > 0) {
+		Logger::Flush();
+	}
 }
 
 void WebTTY::Logger::Flush(void)
 {
-    std::cout << "webttyd (" << getpid() << ", " << pthread_self() << "): " << Logger::buffer.str() << std::endl;
-    Logger::buffer.str("");
+	std::cout << "webttyd (" << getpid() << ", " << pthread_self() << "): " << Logger::buffer.str() << std::endl;
+	Logger::buffer.str("");
 }
