@@ -1,5 +1,6 @@
 /// Standard library includes
 #include <string>
+#include <vector>
 #include <unistd.h>
 #include <cerrno>
 #include <sstream>
@@ -9,12 +10,14 @@
 #include <sys/un.h>
 #include <sys/types.h>
 #include <csignal>
+#include <cstdlib>
 
 /// Program-specific includes
 #include "session.h"
 #include "logger.h"
 #include "socket_helper.h"
 #include "tty.h"
+#include "functions.h"
 
 int WebTTY::Session::isSession = 0;
 std::string WebTTY::Session::sessionHash;
@@ -62,6 +65,15 @@ WebTTY::Session::Session(std::string sessionID)
 		return;
 	}
 
+	/// Receive TTY parameters
+	char *buffer = SocketHelper::read(this->clientSocketFd);
+	if (buffer == NULL) {
+		buffer = (char *) malloc(sizeof(char));
+		*buffer = '\0';
+	}
+	std::vector<std::string> TTYParams = explode(buffer, ';');
+	free(buffer);
+
 	/// Set I/O handlers in separate threads
 	int terrno = pthread_create(&this->outputThreadID, NULL, output_handler_wrapper, NULL);
 	if (terrno != 0) {
@@ -73,7 +85,7 @@ WebTTY::Session::Session(std::string sessionID)
 		}
 	}
 
-	this->tty = new TTY("");
+	this->tty = new TTY(TTYParams);
 
 	/// Setup signal handlers
 	struct sigaction sa;

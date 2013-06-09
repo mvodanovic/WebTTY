@@ -8,6 +8,15 @@ class TTYClient
 {
     protected static $instance = null;
     protected $socket;
+    protected $socketAddress;
+
+    const DAEMON_SOCKET_ADDRESS = '/tmp/webttyd.socket';
+    const CMD_ESTABLISH_CONNECTION = 'c';
+    const CMD_WRITE = 'w';
+    const CMD_READ = 'r';
+
+    protected $lastErrorCode = null;
+    protected $connectionIsEstablished = false;
 
     public static function getInstance()
     {
@@ -24,20 +33,78 @@ class TTYClient
 
     protected function __construct()
     {
-        $this->socket = socket_create(AF_UNIX, SOCK_STREAM,  0);
-        socket_connect($this->socket, '/tmp/webttyd.socket');
-        $this->write('c');
-        $this->write(session_id());
-        var_dump($this->read());
-        socket_close($this->socket);
+        if ($this->obtainSocketAddress() === false) {
+            return;
+        }
+
+        $this->connectToSocket();
+    }
+
+    protected function obtainSocketAddress()
+    {
+        if (file_exists(static::DAEMON_SOCKET_ADDRESS) === false) {
+            $this->lastErrorCode = 2; /// Same as if socket_connect fails
+            return false;
+        }
+
+        if (($socket = socket_create(AF_UNIX, SOCK_STREAM,  0)) === false) {
+            $this->lastErrorCode = socket_last_error();
+            return false;
+        }
+
+        if (socket_connect($socket, static::DAEMON_SOCKET_ADDRESS) === false) {
+            $this->lastErrorCode = socket_last_error();
+            return false;
+        }
+
+        $this->write(static::CMD_ESTABLISH_CONNECTION, $socket);
+        $this->write(session_id(), $socket);
+
+        $this->socketAddress = $this->read($socket);
+
+        socket_close($socket);
+
+        return true;
+    }
+
+    protected function connectToSocket()
+    {
+        if (file_exists($this->socketAddress) === false) {
+            $this->lastErrorCode = 2; /// Same as if socket_connect fails
+            return false;
+        }
+
+        if (($this->socket = socket_create(AF_UNIX, SOCK_STREAM,  0)) === false) {
+            $this->lastErrorCode = socket_last_error();
+            return;
+        }
+
+        if (socket_connect($this->socket, $this->socketAddress) === false) {
+            $this->lastErrorCode = socket_last_error();
+            return;
+        }
+
+        /// Params
+        $this->write("", $this->socket);
+
+        $this->connectionIsEstablished = true;
     }
 
     /// TODO: error handling
-    public function write($buffer)
+    public function write($buffer, $socket = null)
     {
         if ($buffer == null) {
             return;
         }
+
+        if ($socket === null) {
+            if ($this->isConnectionEstablished() === false) {
+                return;
+            }
+
+            $socket = $this->socket;
+        }
+
 
         /// Append string terminator to string, preparation for C/C++ string handling
         $buffer .= "\0";
@@ -47,24 +114,35 @@ class TTYClient
 
         /// The length needs to be packed in the appropriate format for integers in C/C++
         /// It is assumed that integers in C have 32 bits (4 bytes)
-        socket_send($this->socket, pack('l', $length), 4, null);
+        socket_send($socket, pack('l', $length), 4, null);
 
         /// Send the actual buffer
-        socket_send($this->socket, $buffer, $length, null);
+        socket_send($socket, $buffer, $length, null);
     }
 
     /// TODO: error handling
-    public function read()
+    public function read($socket = null)
     {
+        if ($socket === null) {
+            if ($this->isConnectionEstablished() === false) {
+                return null;
+            }
+
+            $socket = $this->socket;
+        }
+
         $buffer = null;
 
-        $retRead = socket_recv($this->socket, $length, 4, null);
+        $retRead = socket_recv($socket, $length, 4, null);
+        if ($length === null) {
+            return null;
+        }
 
         /// The length needs to be unpacket from C/C++ integer format
         $length = unpack('l', $length);
         $length = reset($length);
 
-        $retRead = socket_recv($this->socket, $buffer, $length, null);
+        $retRead = socket_recv($socket, $buffer, $length, null);
 
         if ($retRead != $length) {
             $buffer = null;
@@ -75,5 +153,19 @@ class TTYClient
         $buffer = rtrim($buffer);
 
         return $buffer;
+    }
+
+    public function getLastError()
+    {
+        if ($this->lastErrorCode === null) {
+            return null;
+        }
+
+        return socket_strerror($this->lastErrorCode);
+    }
+
+    public function isConnectionEstablished()
+    {
+        return $this->connectionIsEstablished;
     }
 }

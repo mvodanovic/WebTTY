@@ -9,16 +9,56 @@
 #include "tty.h"
 #include "logger.h"
 
-WebTTY::TTY::TTY(std::string password)
+void WebTTY::TTY::initParams(void)
 {
+	this->host = this->getParam("host");
+	if (this->host.length() == 0) {
+		this->host = "localhost";
+	}
+
+	this->port = atoi(this->getParam("port").c_str());
+	if (this->port <= 0) {
+		this->port = 22;
+	}
+
+	this->authType = this->getParam("authType");
+	if (this->authType.length() == 0) {
+		this->authType = "pubKey";
+	}
+
+	this->password = this->getParam("password");
+
+	this->term = this->getParam("term");
+	if (this->term.length() == 0) {
+		this->term = "xterm-256color";
+	}
+
+	this->width = atoi(this->getParam("width").c_str());
+	if (this->width <= 0) {
+		this->width = 80;
+	}
+
+	this->height = atoi(this->getParam("height").c_str());
+	if (this->height <= 0) {
+		this->height = 25;
+	}
+
+	Logger::Log("host: ", 0); Logger::Log(this->host);
+	Logger::Log("port: ", 0); Logger::Log(this->port);
+	Logger::Log("authType: ", 0); Logger::Log(this->authType);
+	Logger::Log("password: ", 0); Logger::Log(this->password);
+	Logger::Log("term: ", 0); Logger::Log(this->term);
+	Logger::Log("width: ", 0); Logger::Log(this->width);
+	Logger::Log("height: ", 0); Logger::Log(this->height);
+}
+
+WebTTY::TTY::TTY(std::vector<std::string> &params)
+{
+	this->params = params;
 	this->verbosity = SSH_LOG_NOLOG;
-	this->host = "localhost";
-	this->port = 22;
-	this->password = password;
-	this->term = "xterm-256color";
-	this->width = 80;
-	this->height = 25;
 	this->active = 0;
+
+	this->initParams();
 
 	/// Setup SSH threading
 	ssh_threads_set_callbacks(ssh_threads_get_noop());
@@ -58,15 +98,27 @@ WebTTY::TTY::TTY(std::string password)
 	}
 
 	/// Authenticate ourselves
-	//rc = ssh_userauth_password(this->session, NULL, this->password.c_str());
-	rc = ssh_userauth_autopubkey(this->session, this->password.c_str());
-	if (rc != SSH_AUTH_SUCCESS) {
-		Logger::Log("TTY error authenticating with password: ", 0);
-		Logger::Log(ssh_get_error(this->session));
+	if (this->authType.compare("password") == 0) {
+		rc = ssh_userauth_password(this->session, NULL, this->password.c_str());
+		if (rc != SSH_AUTH_SUCCESS) {
+			ssh_disconnect(this->session);
+			ssh_free(this->session);
+			ssh_finalize();
+			Logger::Die("TTY error authenticating with password");
+		}
+	} else if (this->authType.compare("pubKey") == 0) {
+		rc = ssh_userauth_autopubkey(this->session, this->password.c_str());
+		if (rc != SSH_AUTH_SUCCESS) {
+			ssh_disconnect(this->session);
+			ssh_free(this->session);
+			ssh_finalize();
+			Logger::Die("TTY error authenticating with public key");
+		}
+	} else {
 		ssh_disconnect(this->session);
 		ssh_free(this->session);
 		ssh_finalize();
-		exit(EXIT_FAILURE);
+		Logger::Die("TTY Invalid authentication type");
 	}
 
 	/// Open a channel
@@ -221,4 +273,17 @@ int WebTTY::TTY::verifyKnownHost()
 
 	free(hash);
 	return 0;
+}
+
+std::string WebTTY::TTY::getParam(std::string key)
+{
+    key.append("=");
+
+    for (std::vector<std::string>::iterator it = this->params.begin(); it != this->params.end(); it++) {
+        if(it->substr(0, key.size()) == key) {
+            return it->substr(key.size());
+        }
+    }
+
+    return std::string("");
 }
