@@ -12,7 +12,7 @@ webttyd_DESTDIR := /usr/local/bin
 
 ### Variable declarations ###
 webttyd_C_SRCS := $(wildcard *.c)
-webttyd_C_OBJS := ${webttyd_C_SRCS:.cpp=.o}
+webttyd_C_OBJS := ${webttyd_C_SRCS:.c=.o}
 webttyd_CXX_SRCS := $(wildcard *.cpp)
 webttyd_CXX_OBJS := ${webttyd_CXX_SRCS:.cpp=.o}
 webttyd_OBJS := $(webttyd_C_OBJS) $(webttyd_CXX_OBJS)
@@ -67,7 +67,7 @@ uninstall:
 ### Target: help ###
 help:
 	@echo "Targets:"
-	@echo "  all       - build & compile what is necessary"
+	@echo "  all       - compile & build what is necessary"
 	@echo "  install   - install to appropriate directories"
 	@echo "  uninstall - uninstall from system"
 	@echo "  clean     - cleanup objects & executables"
