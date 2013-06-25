@@ -35,9 +35,11 @@ namespace WebTTY
 			pthread_t outputThreadID;
 			std::stringstream buffer;
 			TTY *tty;
+			int isCloseInProgress;
 
 			void handleInput(void);
 			void handleOutput(void);
+			void close(void);
 	};
 }
 

@@ -20,6 +20,7 @@ class ShowTerminal extends HTMLController
             //var_dump(TTYClient::getInstance()->read());
             var_dump("done");
         }
+        TTYClient::getInstance()->disconnect();
         \WebFW\Core\SessionHandler::kill("tty");
     }
 }

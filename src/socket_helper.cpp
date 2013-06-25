@@ -42,12 +42,15 @@ char *WebTTY::SocketHelper::read(int socketFd)
 		buffer = NULL;
 		return buffer;
 	}
-
+Logger::Log("in: ", 0);
+buffer == NULL ? Logger::Log("<NULL>") : Logger::Log(buffer);
 	return buffer;
 }
 
 void WebTTY::SocketHelper::write(int socketFd, const char *buffer)
 {
+Logger::Log("out: ", 0);
+buffer == NULL ? Logger::Log("<NULL>") : Logger::Log(buffer);
 	if (buffer == NULL) {
 		return;
 	}
@@ -81,16 +84,18 @@ void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 	/// Create the socket
 	if ((socketFd = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
 		if (errno != EINTR) {
-			Logger::Die(strerror(errno));
+			Logger::Log(strerror(errno));
 		}
+		throw "Socket creation failed";
 	}
 
 	/// Indicate that this is a server
 	if (bind(socketFd, (sockaddr *) &name, SUN_LEN(&name)) == -1) {
 		close(socketFd);
 		if (errno != EINTR) {
-			Logger::Die(strerror(errno));
+			Logger::Log(strerror(errno));
 		}
+		throw "Socket bind failed";
 	}
 
 	/// Set appropriate permissions
@@ -100,8 +105,9 @@ void WebTTY::SocketHelper::listen(int &socketFd, std::string socketPath)
 	if (::listen(socketFd, 5) == -1) {
 		close(socketFd);
 		if (errno != EINTR) {
-			Logger::Die(strerror(errno));
+			Logger::Log(strerror(errno));
 		}
+		throw "Socket listen failed";
 	}
 }
 

@@ -168,4 +168,12 @@ class TTYClient
     {
         return $this->connectionIsEstablished;
     }
+
+    public function disconnect()
+    {
+        if ($this->isConnectionEstablished()) {
+            $this->connectionIsEstablished = false;
+            socket_close($this->socket);
+        }
+    }
 }

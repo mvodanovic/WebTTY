@@ -1,6 +1,5 @@
 /// Standard library includes
 #include <string>
-#include <cerrno>
 #include <libssh/libssh.h>
 #include <libssh/callbacks.h>
 #include <cstdlib>
@@ -57,6 +56,10 @@ WebTTY::TTY::TTY(std::vector<std::string> &params)
 	this->params = params;
 	this->verbosity = SSH_LOG_NOLOG;
 	this->active = 0;
+	this->isSessionInitialized = 0;
+	this->isSessionCreated = 0;
+	this->isSessionConnected = 0;
+	this->isChannelOpen = 0;
 
 	this->initParams();
 
@@ -66,15 +69,18 @@ WebTTY::TTY::TTY(std::vector<std::string> &params)
 	/// Initialize global cryptographic data structures
 	int rc = ssh_init();
 	if (rc != 0) {
-		Logger::Die("TTY init failed!");
+		this->close();
+		throw "TTY init failed!";
 	}
+	this->isSessionInitialized = 1;
 
 	/// Open session & set options
 	this->session = ssh_new();
 	if (this->session == NULL) {
-		ssh_finalize();
-		Logger::Die("TTY session creation failed!");
+		this->close();
+		throw "TTY session creation failed!";
 	}
+	this->isSessionCreated = 1;
 	ssh_options_set(this->session, SSH_OPTIONS_HOST, this->host.c_str());
 	ssh_options_set(this->session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
 	ssh_options_set(this->session, SSH_OPTIONS_PORT, &port);
@@ -82,55 +88,42 @@ WebTTY::TTY::TTY(std::vector<std::string> &params)
 	/// Connect to server
 	rc = ssh_connect(this->session);
 	if (rc != SSH_OK) {
-		Logger::Log("TTY error connecting to localhost: ", 0);
-		Logger::Log(ssh_get_error(this->session));
-		ssh_free(this->session);
-		ssh_finalize();
-		exit(EXIT_FAILURE);
+		this->close();
+		throw "TTY error connecting to localhost!";
 	}
+	this->isSessionConnected = 1;
 
 	/// Verify the server's identity
 	if (this->verifyKnownHost() < 0) {
-		ssh_disconnect(this->session);
-		ssh_free(this->session);
-		ssh_finalize();
-		Logger::Die("TTY host verification failed");
+		this->close();
+		throw "TTY host verification failed!";
 	}
 
 	/// Authenticate ourselves
 	if (this->authType.compare("password") == 0) {
 		rc = ssh_userauth_password(this->session, NULL, this->password.c_str());
 		if (rc != SSH_AUTH_SUCCESS) {
-			ssh_disconnect(this->session);
-			ssh_free(this->session);
-			ssh_finalize();
-			Logger::Die("TTY error authenticating with password");
+			this->close();
+			throw "TTY error authenticating with password!";
 		}
 	} else if (this->authType.compare("pubKey") == 0) {
 		rc = ssh_userauth_autopubkey(this->session, this->password.c_str());
 		if (rc != SSH_AUTH_SUCCESS) {
-			ssh_disconnect(this->session);
-			ssh_free(this->session);
-			ssh_finalize();
-			Logger::Die("TTY error authenticating with public key");
+			this->close();
+			throw "TTY error authenticating with public key!";
 		}
 	} else {
-		ssh_disconnect(this->session);
-		ssh_free(this->session);
-		ssh_finalize();
-		Logger::Die("TTY Invalid authentication type");
+		this->close();
+		throw "TTY Invalid authentication type!";
 	}
 
 	/// Open a channel
 	this->channel = ssh_channel_new(this->session);
 	if (this->channel == NULL) {
-		Logger::Log("TTY couldn't open a channel: ", 0);
-		Logger::Log(ssh_get_error(this->session));
-		ssh_disconnect(this->session);
-		ssh_free(this->session);
-		ssh_finalize();
-		exit(EXIT_FAILURE);
+		this->close();
+		throw "TTY couldn't open a channel!";
 	}
+	this->isChannelOpen = 1;
 
 	/// Set channel blocking/nonblocking
 	ssh_channel_set_blocking(this->channel, 1);
@@ -138,40 +131,22 @@ WebTTY::TTY::TTY(std::vector<std::string> &params)
 	/// Open a channel session
 	rc = ssh_channel_open_session(this->channel);
 	if (rc != SSH_OK) {
-		Logger::Log("TTY couldn't open a channel session: ", 0);
-		Logger::Log(ssh_get_error(this->session));
-		ssh_channel_close(this->channel);
-		ssh_channel_free(this->channel);
-		ssh_disconnect(this->session);
-		ssh_free(this->session);
-		ssh_finalize();
-		exit(EXIT_FAILURE);
+		this->close();
+		throw "TTY couldn't open a channel session!";
 	}
 
 	/// Request a TTY
 	rc = ssh_channel_request_pty_size(this->channel, this->term.c_str(), this->width, this->height);
 	if (rc != SSH_OK) {
-		Logger::Log("TTY couldn't get a TTY: ", 0);
-		Logger::Log(ssh_get_error(this->session));
-		ssh_channel_close(this->channel);
-		ssh_channel_free(this->channel);
-		ssh_disconnect(this->session);
-		ssh_free(this->session);
-		ssh_finalize();
-		exit(EXIT_FAILURE);
+		this->close();
+		throw "TTY couldn't get a TTY!";
 	}
 
 	/// Request a shell
 	rc = ssh_channel_request_shell(this->channel);
 	if (rc != SSH_OK) {
-		Logger::Log("TTY couldn't get a shell: ", 0);
-		Logger::Log(ssh_get_error(this->session));
-		ssh_channel_close(this->channel);
-		ssh_channel_free(this->channel);
-		ssh_disconnect(this->session);
-		ssh_free(this->session);
-		ssh_finalize();
-		exit(EXIT_FAILURE);
+		this->close();
+		throw "TTY couldn't get a shell!";
 	}
 
 	this->active = 1;
@@ -179,12 +154,7 @@ WebTTY::TTY::TTY(std::vector<std::string> &params)
 
 WebTTY::TTY::~TTY()
 {
-	this->active = 0;
-	ssh_channel_close(this->channel);
-	ssh_channel_free(this->channel);
-	ssh_disconnect(this->session);
-	ssh_free(this->session);
-	ssh_finalize();
+	this->close();
 }
 
 void WebTTY::TTY::send(std::string input)
@@ -277,13 +247,39 @@ int WebTTY::TTY::verifyKnownHost()
 
 std::string WebTTY::TTY::getParam(std::string key)
 {
-    key.append("=");
+	key.append("=");
 
-    for (std::vector<std::string>::iterator it = this->params.begin(); it != this->params.end(); it++) {
-        if(it->substr(0, key.size()) == key) {
-            return it->substr(key.size());
-        }
-    }
+	for (std::vector<std::string>::iterator it = this->params.begin(); it != this->params.end(); it++) {
+		if(it->substr(0, key.size()) == key) {
+			return it->substr(key.size());
+		}
+	}
 
-    return std::string("");
+	return std::string("");
+}
+
+void WebTTY::TTY::close(void)
+{
+	this->active = 0;
+
+	if (this->isChannelOpen == 1) {
+		ssh_channel_close(this->channel);
+		ssh_channel_free(this->channel);
+		this->isChannelOpen = 0;
+	}
+
+	if (this->isSessionConnected == 1) {
+		ssh_disconnect(this->session);
+		this->isSessionConnected = 0;
+	}
+
+	if (this->isSessionCreated == 1) {
+		ssh_free(this->session);
+		this->isSessionCreated = 0;
+	}
+
+	if (this->isSessionInitialized == 1) {
+		ssh_finalize();
+		this->isSessionInitialized = 0;
+	}
 }

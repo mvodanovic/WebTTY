@@ -28,10 +28,15 @@ namespace WebTTY
 			int height;
 			int active;
 			std::vector<std::string> params;
+			int isSessionInitialized;
+			int isSessionCreated;
+			int isSessionConnected;
+			int isChannelOpen;
 
 			int verifyKnownHost(void);
 			std::string getParam(std::string);
 			void initParams(void);
+			void close(void);
 	};
 }
 

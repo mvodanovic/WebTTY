@@ -34,7 +34,13 @@ WebTTY::Session *WebTTY::Session::getInstance(void)
 
 void WebTTY::Session::Start()
 {
-	Session *session = Session::getInstance();
+
+	Session *session;
+	try {
+		session = Session::getInstance();
+	} catch (const char *msg) {
+		Logger::Log(msg);
+	}
 	delete session;
 
 }
@@ -51,9 +57,18 @@ WebTTY::Session::Session(std::string sessionID)
 	Session::instance = this;
 	this->sessionID = sessionID;
 	this->outputThreadID = 0;
+	this->socketFd = 0;
+	this->clientSocketFd = 0;
+	this->tty = NULL;
+	this->isCloseInProgress = 0;
 
 	/// Listen for connections
-	SocketHelper::listen(this->socketFd, Session::getSocketPath(Session::sessionHash));
+	try {
+		SocketHelper::listen(this->socketFd, Session::getSocketPath(Session::sessionHash));
+	} catch (const char *msg) {
+		this->close();
+		throw msg;
+	}
 
 	/// Accept client connection
 	struct sockaddr_un clientName;
@@ -62,7 +77,8 @@ WebTTY::Session::Session(std::string sessionID)
 		if (errno != EINTR) {
 			Logger::Log(strerror(errno));
 		}
-		return;
+		this->close();
+		throw "Client socket accept failed";
 	}
 
 	/// Receive TTY parameters
@@ -74,18 +90,22 @@ WebTTY::Session::Session(std::string sessionID)
 	std::vector<std::string> TTYParams = explode(buffer, ';');
 	free(buffer);
 
+	try {
+		this->tty = new TTY(TTYParams);
+	} catch (const char *msg) {
+		this->close();
+		throw msg;
+	}
+
 	/// Set I/O handlers in separate threads
 	int terrno = pthread_create(&this->outputThreadID, NULL, output_handler_wrapper, NULL);
 	if (terrno != 0) {
-		close(this->socketFd);
-		close(this->clientSocketFd);
-		unlink(Session::getSocketPath(Session::sessionHash).c_str());
 		if (terrno != EINTR) {
-			Logger::Die(strerror(terrno));
+			Logger::Log(strerror(terrno));
 		}
+		this->close();
+		throw "Thread create failed";
 	}
-
-	this->tty = new TTY(TTYParams);
 
 	/// Setup signal handlers
 	struct sigaction sa;
@@ -95,22 +115,11 @@ WebTTY::Session::Session(std::string sessionID)
 	sigaction (SIGTERM, &sa, NULL);
 
 	this->handleInput();
-
 }
 
 WebTTY::Session::~Session()
 {
-	/// Reset signal handlers
-	struct sigaction sa;
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = SIG_DFL;
-	sigaction (SIGINT, &sa, NULL);
-	sigaction (SIGTERM, &sa, NULL);
-
-	close(this->socketFd);
-	close(this->clientSocketFd);
-	unlink(Session::getSocketPath(Session::sessionHash).c_str());
-	delete this->tty;
+	this->close();
 }
 
 void WebTTY::Session::handleInput(void)
@@ -162,4 +171,37 @@ void WebTTY::Session::reapChildThread(int signal)
 			instance->outputThreadID = 0;
 			break;
 	}
+}
+
+void WebTTY::Session::close(void)
+{
+	if (this->isCloseInProgress == 1) {
+		return;
+	}
+	this->isCloseInProgress = 1;
+
+	/// Reset signal handlers
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = SIG_DFL;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+
+	if (this->socketFd != 0) {
+		::close(this->socketFd);
+		this->socketFd = 0;
+	}
+
+	if (this->clientSocketFd != 0) {
+		::close(this->clientSocketFd);
+		this->clientSocketFd = 0;
+	}
+	unlink(Session::getSocketPath(Session::sessionHash).c_str());
+
+	if (this->tty != NULL) {
+		delete this->tty;
+		this->tty = NULL;
+	}
+
+	this->isCloseInProgress = 0;
 }
