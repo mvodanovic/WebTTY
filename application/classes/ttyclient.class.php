@@ -3,6 +3,7 @@
 namespace Application\Classes;
 
 use \WebFW\Core\SessionHandler;
+use \Config\Specifics\Data;
 
 class TTYClient
 {
@@ -85,7 +86,17 @@ class TTYClient
         }
 
         /// Params
-        $this->write("", $this->socket);
+        $params = Data::getItem('TTY_PARAMS');
+        if (is_array($params)) {
+            $paramsString = array();
+            foreach ($params as $key => $value) {
+                $paramsString[] = $key . '=' . $value;
+            }
+            $paramsString = implode(';', $paramsString);
+        } else {
+            $paramsString = $params . '';
+        }
+        $this->write($paramsString, $this->socket);
 
         $this->connectionIsEstablished = true;
     }

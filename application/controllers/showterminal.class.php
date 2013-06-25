@@ -4,6 +4,7 @@ namespace Application\Controllers;
 
 use \WebFW\Core\HTMLController;
 use \Application\Classes\TTYClient;
+use \Application\Classes\OutputParser;
 
 class ShowTerminal extends HTMLController
 {
@@ -17,10 +18,16 @@ class ShowTerminal extends HTMLController
         if (TTYClient::getInstance()->isConnectionEstablished() === false) {
             var_dump(TTYClient::getInstance()->getLastError());
         } else {
-            //var_dump(TTYClient::getInstance()->read());
-            var_dump("done");
+            $text = TTYClient::getInstance()->read();
+            TTYClient::getInstance()->write("ls -l\n");
+            $text .= TTYClient::getInstance()->read();
+
+            $parser = new OutputParser();
+            $text = $parser->parse($text);
+            echo '<pre style="color: white; background-color: black; font-face: monospace;">' . $text . '</pre>';
         }
         TTYClient::getInstance()->disconnect();
         \WebFW\Core\SessionHandler::kill("tty");
     }
+
 }
