@@ -7,7 +7,10 @@ class OutputParser
     protected $closeSpan;
     protected $isInsideSpan;
     protected $isBold;
+    protected $isItalic;
     protected $isUnderlined;
+    protected $isBlinking;
+    protected $isConcealed;
     protected $fgColor;
     protected $fgColorType;
     protected $bgColor;
@@ -15,6 +18,7 @@ class OutputParser
 
     const COLOR_16 = 1;
     const COLOR_256 = 2;
+    const COLOR_RGB = 3;
 
     protected $color16 = array(
         /// dark
@@ -305,7 +309,10 @@ class OutputParser
     {
         $this->closeSpan = true;
         $this->isBold = false;
+        $this->isItalic = false;
         $this->isUnderlined = false;
+        $this->isBlinking = false;
+        $this->isConcealed = false;
         $this->fgColor = null;
         $this->fgColorType = static::COLOR_16;
         $this->bgColor = null;
@@ -317,12 +324,37 @@ class OutputParser
         $this->isInsideSpan = false;
         $this->clear();
         $esc = pack('C', 27);
+        $bel = pack('C', 7);
 
+        /// Set title
+        $text = preg_replace("#{$esc}\]0;(.*?){$bel}#", '<script>document.title="$1";</script>', $text);
+
+        /// Move cursor U/D/L/R by N
+        $text = preg_replace("#{$esc}\[([0-9]+)[A-D]#", '', $text);
+
+        /// Position the cursor
+        $text = preg_replace("#{$esc}\[([0-9]+);([0-9]+)[Hf]#", '', $text);
+
+        /// Clear screen, position cursor to (0,0)
+        $text = preg_replace("#{$esc}\[2J#", '', $text);
+
+        /// Erase to end of line
+        $text = preg_replace("#{$esc}\[K#", '', $text);
+
+        /// Save cursor position
+        $text = preg_replace("#{$esc}\[s#", '', $text);
+
+        /// Restore cursor position
+        $text = preg_replace("#{$esc}\[u#", '', $text);
+
+        /// Designate character set
+        $text = preg_replace("#{$esc}[\(\)\*\+][0AB4C5RQKYE6ZH7=]#", '', $text);
+
+        /// Colors / formatting
         $text = preg_replace_callback(
             "#{$esc}\[(.*?)m#",
             function ($matches) {
                 $text = '';
-                $original = $matches[0];
                 $specialColorStep = 0;
                 $specialColorIsBackground = null;
 
@@ -336,8 +368,14 @@ class OutputParser
                                 $this->clear();
                             } elseif ($code == 1) {
                                 $this->isBold = true;
-                            } elseif ($code == 2) {
+                            } elseif ($code == 3) {
+                                $this->isItalic = true;
+                            } elseif ($code == 4) {
                                 $this->isUnderlined = true;
+                            } elseif ($code == 5) {
+                                $this->isBlinking = true;
+                            } elseif ($code == 8) {
+                                $this->isConcealed = true;
                             } elseif ($code >= 30 && $code <= 37) {
                                 $this->fgColor = ($code - 30) . '';
                                 $this->fgColorType = static::COLOR_16;
@@ -360,16 +398,41 @@ class OutputParser
                                     $this->bgColorType = static::COLOR_256;
                                 }
                                 $specialColorStep = 2;
+                            } elseif ($code == 2) {
+                                if ($specialColorIsBackground === false) {
+                                    $this->fgColorType = static::COLOR_RGB;
+                                } else {
+                                    $this->bgColorType = static::COLOR_RGB;
+                                }
+                                $specialColorStep = 2;
                             }
                             break;
                         case 2:
-                            if ($specialColorIsBackground === false) {
+                            if ($this->fgColorType === static::COLOR_256 && $specialColorIsBackground === false) {
                                 $this->fgColor = $code;
-                            } else {
+                                $specialColorStep = 0;
+                                $specialColorIsBackground = null;
+                                break;
+                            } elseif ($this->bgColorType === static::COLOR_256) {
                                 $this->bgColor = $code;
+                                $specialColorStep = 0;
+                                $specialColorIsBackground = null;
+                                break;
                             }
-                            $specialColorStep = 0;
-                            $specialColorIsBackground = null;
+                            /// intentional passing to lower cases
+                        case 3:
+                        case 4:
+                            if ($this->fgColorType === static::COLOR_RGB && $specialColorIsBackground === false) {
+                                $this->fgColor .= sprintf('%02x', $code);
+                                $specialColorStep += 1;
+                            } elseif ($this->bgColorType === static::COLOR_RGB) {
+                                $this->bgColor .= sprintf('%02x', $code);
+                                $specialColorStep += 1;
+                            }
+                            if ($specialColorStep > 4) {
+                                $specialColorStep = 0;
+                                $specialColorIsBackground = null;
+                            }
                             break;
                     }
 
@@ -382,10 +445,6 @@ class OutputParser
                 if ($css !== '') {
                     $text .= '<span style="' . $css . '">';
                     $this->isInsideSpan = true;
-                }
-
-                if ($text === '') {
-                    $text = $original;
                 }
 
                 return $text;
@@ -405,8 +464,16 @@ class OutputParser
             $css .= 'font-weight:bold;';
         }
 
+        if ($this->isItalic == true) {
+            $css .= 'font-style:italic;';
+        }
+
         if ($this->isUnderlined == true) {
             $css .= 'font-decoration:underline;';
+        }
+
+        if ($this->isBlinking == true) {
+            $css .= "-webkit-animation:blink 0.5s linear 0s normal none infinite blink;animation:blink 0.5s linear 0s normal none infinite blink;";
         }
 
         if ($this->fgColor !== null) {
@@ -417,6 +484,11 @@ class OutputParser
                     break;
                 case static::COLOR_256:
                     $css .= 'color:#' . $this->color256[$this->fgColor] . ';';
+                    break;
+                case static::COLOR_RGB:
+                    if (strlen($this->fgColor) == 6) {
+                        $css .= 'color:#' . $this->fgColor . ';';
+                    }
                     break;
             }
         }
@@ -429,6 +501,11 @@ class OutputParser
                     break;
                 case static::COLOR_256:
                     $css .= 'background-color:#' . $this->color256[$this->bgColor] . ';';
+                    break;
+                case static::COLOR_RGB:
+                    if (strlen($this->bgColor) == 6) {
+                        $css .= 'background-color:#' . $this->bgColor . ';';
+                    }
                     break;
             }
         }

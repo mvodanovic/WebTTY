@@ -24,7 +24,7 @@ class ShowTerminal extends HTMLController
 
             $parser = new OutputParser();
             $text = $parser->parse($text);
-            echo '<pre style="color: white; background-color: black; font-face: monospace;">' . $text . '</pre>';
+            echo '<pre style="color: white; background-color: black; font-family: \'DejaVu Sans Mono\', monospace;">' . $text . '</pre>';
         }
         TTYClient::getInstance()->disconnect();
         \WebFW\Core\SessionHandler::kill("tty");
