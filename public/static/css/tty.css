@@ -1,0 +1,11 @@
+.tty {
+    width: 800px;
+    height: 600px;
+    background-color: black;
+    color: white;
+    font-family: "DejaVu Sans Mono", monospace;
+    white-space: pre-wrap;
+    padding: 2px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+}

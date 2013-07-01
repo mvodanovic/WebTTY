@@ -12,9 +12,14 @@ class ShowTerminal extends HTMLController
     {
         parent::__construct();
         $this->pageTitle = 'Terminal';
+        $this->setLinkedJavaScript('/static/js/jquery-2.0.2.min.js');
+        $this->setLinkedJavaScript('/static/js/tty.js');
+        $this->setLinkedCSS('/static/css/tty.css');
     }
     public function execute()
     {
+        return;
+
         if (TTYClient::getInstance()->isConnectionEstablished() === false) {
             var_dump(TTYClient::getInstance()->getLastError());
         } else {
